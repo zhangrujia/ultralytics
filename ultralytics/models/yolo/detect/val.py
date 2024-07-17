@@ -41,6 +41,11 @@ class DetectionValidator(BaseValidator):
         self.iouv = torch.linspace(0.5, 0.95, 10)  # IoU vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
         self.lb = []  # for autolabelling
+        if self.args.save_hybrid:
+            LOGGER.warning(
+                "WARNING ⚠️ 'save_hybrid=True' will append ground truth to predictions for autolabelling.\n"
+                "WARNING ⚠️ 'save_hybrid=True' will cause incorrect mAP.\n"
+            )
 
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
@@ -53,14 +58,10 @@ class DetectionValidator(BaseValidator):
             height, width = batch["img"].shape[2:]
             nb = len(batch["img"])
             bboxes = batch["bboxes"] * torch.tensor((width, height, width, height), device=self.device)
-            self.lb = (
-                [
-                    torch.cat([batch["cls"][batch["batch_idx"] == i], bboxes[batch["batch_idx"] == i]], dim=-1)
-                    for i in range(nb)
-                ]
-                if self.args.save_hybrid
-                else []
-            )  # for autolabelling
+            self.lb = [
+                torch.cat([batch["cls"][batch["batch_idx"] == i], bboxes[batch["batch_idx"] == i]], dim=-1)
+                for i in range(nb)
+            ]
 
         return batch
 
@@ -202,13 +203,18 @@ class DetectionValidator(BaseValidator):
         Return correct prediction matrix.
 
         Args:
-            detections (torch.Tensor): Tensor of shape [N, 6] representing detections.
-                Each detection is of the format: x1, y1, x2, y2, conf, class.
-            labels (torch.Tensor): Tensor of shape [M, 5] representing labels.
-                Each label is of the format: class, x1, y1, x2, y2.
+            detections (torch.Tensor): Tensor of shape (N, 6) representing detections where each detection is
+                (x1, y1, x2, y2, conf, class).
+            gt_bboxes (torch.Tensor): Tensor of shape (M, 4) representing ground-truth bounding box coordinates. Each
+                bounding box is of the format: (x1, y1, x2, y2).
+            gt_cls (torch.Tensor): Tensor of shape (M,) representing target class indices.
 
         Returns:
-            (torch.Tensor): Correct prediction matrix of shape [N, 10] for 10 IoU levels.
+            (torch.Tensor): Correct prediction matrix of shape (N, 10) for 10 IoU levels.
+
+        Note:
+            The function does not return any value directly usable for metrics calculation. Instead, it provides an
+            intermediate representation used for evaluating predictions against ground truth.
         """
         iou = box_iou(gt_bboxes, detections[:, :4])
         return self.match_predictions(detections[:, 5], gt_cls, iou)
