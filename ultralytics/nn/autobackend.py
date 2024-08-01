@@ -121,7 +121,6 @@ class AutoBackend(nn.Module):
             paddle,
             ncnn,
             triton,
-            rknn,
         ) = self._model_type(w)
         fp16 &= pt or jit or onnx or xml or engine or nn_module or triton  # FP16
         nhwc = coreml or saved_model or pb or tflite or edgetpu  # BHWC formats (vs torch BCWH)
@@ -553,9 +552,6 @@ class AutoBackend(nn.Module):
                 # WARNING: 'output_names' sorted as a temporary fix for https://github.com/pnnx/pnnx/issues/130
                 y = [np.array(ex.extract(x)[1])[None] for x in sorted(self.net.output_names())]
 
-        elif getattr(self, 'rknn', False):
-            assert "for inference, please refer to https://github.com/airockchip/rknn_model_zoo/"
-            
         # NVIDIA Triton Inference Server
         elif self.triton:
             im = im.cpu().numpy()  # torch to numpy
@@ -591,14 +587,21 @@ class AutoBackend(nn.Module):
                     if x.ndim == 3:  # if task is not classification, excluding masks (ndim=4) as well
                         # Denormalize xywh by image size. See https://github.com/ultralytics/ultralytics/pull/1695
                         # xywh are normalized in TFLite/EdgeTPU to mitigate quantization error of integer models
-                        x[:, [0, 2]] *= w
-                        x[:, [1, 3]] *= h
+                        if x.shape[-1] == 6:  # end-to-end model
+                            x[:, :, [0, 2]] *= w
+                            x[:, :, [1, 3]] *= h
+                        else:
+                            x[:, [0, 2]] *= w
+                            x[:, [1, 3]] *= h
                     y.append(x)
             # TF segment fixes: export is reversed vs ONNX export and protos are transposed
             if len(y) == 2:  # segment with (det, proto) output order reversed
                 if len(y[1].shape) != 4:
                     y = list(reversed(y))  # should be y = (1, 116, 8400), (1, 160, 160, 32)
-                y[1] = np.transpose(y[1], (0, 3, 1, 2))  # should be y = (1, 116, 8400), (1, 32, 160, 160)
+                if y[1].shape[-1] == 6:  # end-to-end model
+                    y = [y[1]]
+                else:
+                    y[1] = np.transpose(y[1], (0, 3, 1, 2))  # should be y = (1, 116, 8400), (1, 32, 160, 160)
             y = [x if isinstance(x, np.ndarray) else x.numpy() for x in y]
 
         # for x in y:
