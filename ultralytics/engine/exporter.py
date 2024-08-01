@@ -385,30 +385,6 @@ class Exporter:
         else:
             ts.save(str(f), _extra_files=extra_files)
         return f, None
-
-    @try_export
-    def export_rknn(self, prefix=colorstr('RKNN:')):
-        """YOLOv8 RKNN model export."""
-        LOGGER.info(f'\n{prefix} starting export with torch {torch.__version__}...')
-
-        # ts = torch.jit.trace(self.model, self.im, strict=False)
-        # f = str(self.file).replace(self.file.suffix, f'_rknnopt.torchscript')
-        # torch.jit.save(ts, str(f))
-
-        f = str(self.file).replace(self.file.suffix, f'.onnx')
-        opset_version = self.args.opset or get_latest_opset()
-        torch.onnx.export(
-            self.model,
-            self.im[0:1,:,:,:],
-            f,
-            verbose=False,
-            opset_version=12,
-            do_constant_folding=True,  # WARNING: DNN inference with torch>=1.12 may require do_constant_folding=False
-            input_names=['images'])
-
-        LOGGER.info(f'\n{prefix} feed {f} to RKNN-Toolkit or RKNN-Toolkit2 to generate RKNN model.\n' 
-                    'Refer https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo')
-        return f, None
     
     @try_export
     def export_onnx(self, prefix=colorstr("ONNX:")):
@@ -1039,7 +1015,41 @@ class Exporter:
         #     j.write(subst)
         yaml_save(Path(f) / "metadata.yaml", self.metadata)  # add metadata.yaml
         return f, None
+    
+    @try_export
+    def export_rknn(self, prefix=colorstr('RKNN:')):
+        """YOLOv8 RKNN model export."""
+        LOGGER.info(f'\n{prefix} starting export with torch {torch.__version__}...')
 
+        # ts = torch.jit.trace(self.model, self.im, strict=False)
+        # f = str(self.file).replace(self.file.suffix, f'_rknnopt.torchscript')
+        # torch.jit.save(ts, str(f))
+
+        #f = str(self.file).replace(self.file.suffix, f'.onnx')
+        #opset_version = self.args.opset or get_latest_opset()
+        # torch.onnx.export(
+        #     self.model,
+        #     self.im[0:1,:,:,:],
+        #     f,
+        #     verbose=False,
+        #     opset_version=12,
+        #     do_constant_folding=True,  # WARNING: DNN inference with torch>=1.12 may require do_constant_folding=False
+        #     input_names=['images'])
+        f, _ = self.export_onnx()
+        from rknn.api import RKNN
+        rknn = RKNN(verbose=False)
+        rknn.config(mean_values=[[0, 0, 0]], std_values=[
+                    [255, 255, 255]], target_platform='rk3588')
+        f = rknn.load_onnx(model=f)
+        #q = "int8" if self.args.int8 else "half" if self.args.half else ""  # quantization
+        q = True if self.args.int8 else False
+        f = rknn.build(do_quantization=q)
+        f = rknn.export_rknn("yolov8n.rknn")
+
+        LOGGER.info(f'\n{prefix} feed {f} to RKNN-Toolkit or RKNN-Toolkit2 to generate RKNN model.\n' 
+                    'Refer https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo')
+        return f, None
+    
     def _add_tflite_metadata(self, file):
         """Add metadata to *.tflite models per https://www.tensorflow.org/lite/models/convert/metadata."""
         import flatbuffers
