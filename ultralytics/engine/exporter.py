@@ -1014,7 +1014,27 @@ class Exporter:
         #     j.write(subst)
         yaml_save(Path(f) / "metadata.yaml", self.metadata)  # add metadata.yaml
         return f, None
+    
+    @try_export
+    def export_rknn(self, prefix=colorstr('RKNN:')):
+        """YOLOv8 RKNN model export."""
+        LOGGER.info(f'\n{prefix} starting export with torch {torch.__version__}...')
 
+        f, _ = self.export_onnx()
+        from rknn.api import RKNN
+        rknn = RKNN(verbose=False)
+        rknn.config(mean_values=[[0, 0, 0]], std_values=[
+                    [255, 255, 255]], target_platform='rk3588')
+        f = rknn.load_onnx(model=f)
+        #q = "int8" if self.args.int8 else "half" if self.args.half else ""  # quantization
+        #q = True if self.args.int8 else False
+        f = rknn.build(do_quantization=False)
+        f = rknn.export_rknn("yolov8n.rknn")
+
+        LOGGER.info(f'\n{prefix} feed {f} to RKNN-Toolkit or RKNN-Toolkit2 to generate RKNN model.\n' 
+                    'Refer https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo')
+        return f, None
+    
     def _add_tflite_metadata(self, file):
         """Add metadata to *.tflite models per https://www.tensorflow.org/lite/models/convert/metadata."""
         import flatbuffers
