@@ -64,7 +64,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ultralytics.cfg import TASK2DATA, get_cfg
+from ultralytics.cfg import TASK2DATA, get_cfg, RKNN_CHIPS
 from ultralytics.data import build_dataloader
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
@@ -112,6 +112,7 @@ def export_formats():
         ["TensorFlow.js", "tfjs", "_web_model", True, False],
         ["PaddlePaddle", "paddle", "_paddle_model", True, True],
         ["NCNN", "ncnn", "_ncnn_model", True, True],
+        ["RKNN", "rknn", ".rknn", True, False],
     ]
     return pandas.DataFrame(x, columns=["Format", "Argument", "Suffix", "CPU", "GPU"])
 
@@ -183,7 +184,7 @@ class Exporter:
         flags = [x == fmt for x in fmts]
         if sum(flags) != 1:
             raise ValueError(f"Invalid export format='{fmt}'. Valid formats are {fmts}")
-        jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, ncnn = flags  # export booleans
+        jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, ncnn, rknn = flags  # export booleans
         is_tf_format = any((saved_model, pb, tflite, edgetpu, tfjs))
 
         # Device
@@ -209,6 +210,8 @@ class Exporter:
         if self.args.optimize:
             assert not ncnn, "optimize=True not compatible with format='ncnn', i.e. use optimize=False"
             assert self.device.type == "cpu", "optimize=True not compatible with cuda devices, i.e. use device='cpu'"
+        if rknn:
+            assert self.args.name in RKNN_CHIPS, f"Invalid processor name '{self.args.name}' for Rockchip RKNN export. Valid names are {RKNN_CHIPS}."
         if edgetpu:
             if not LINUX:
                 raise SystemError("Edge TPU export only supported on Linux. See https://coral.ai/docs/edgetpu/compiler")
@@ -323,6 +326,8 @@ class Exporter:
             f[10], _ = self.export_paddle()
         if ncnn:  # NCNN
             f[11], _ = self.export_ncnn()
+        if rknn: #RKNN
+            f[12], _ = self.export_rknn()    
 
         # Finish
         f = [str(x) for x in f if x]  # filter out '' and None
@@ -1022,14 +1027,16 @@ class Exporter:
 
         f, _ = self.export_onnx()
         from rknn.api import RKNN
+        platform = self.args.name  # 'rk3566', 'rk3568', 'rk3588', 'rk3562', 'rk3576', 'rk2118'
         rknn = RKNN(verbose=False)
-        rknn.config(mean_values=[[0, 0, 0]], std_values=[
-                    [255, 255, 255]], target_platform='rk3588')
-        f = rknn.load_onnx(model=f)
+        rknn.config(mean_values=[[0, 0, 0]], std_values=[[255, 255, 255]], target_platform=platform)  
+        # 'rk3566', 'rk3568', 'rk3588', 'rk3562', 'rk3576', 'rk2118'
+        # Must have quantization: 'rv1103', 'rv1106','rv1103b'
+        _ = rknn.load_onnx(model=f)
         #q = "int8" if self.args.int8 else "half" if self.args.half else ""  # quantization
         #q = True if self.args.int8 else False
-        f = rknn.build(do_quantization=False)
-        f = rknn.export_rknn("yolov8n.rknn")
+        _ = rknn.build(do_quantization=False)
+        f = rknn.export_rknn(f.replace(".onnx", f"-{platform}.rknn"))
 
         LOGGER.info(f'\n{prefix} feed {f} to RKNN-Toolkit or RKNN-Toolkit2 to generate RKNN model.\n' 
                     'Refer https://github.com/airockchip/rknn_model_zoo/tree/main/models/CV/object_detection/yolo')
