@@ -771,7 +771,7 @@ class C3k2(C2f):
         )
 
 
-class C4(C2f):
+class C4(C2f2):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
     def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5, nk=2):
