@@ -73,7 +73,6 @@ class Heatmap:
         self.class_wise_count = {}
         self.count_txt_color = count_txt_color
         self.count_bg_color = count_bg_color
-        self.cls_txtdisplay_gap = 50
 
         # Decay factor
         self.decay_factor = decay_factor
