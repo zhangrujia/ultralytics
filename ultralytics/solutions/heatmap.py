@@ -56,10 +56,7 @@ class Heatmap:
         self.heatmap = None
         self.heatmap_alpha = heatmap_alpha
 
-        # Predict/track information
-        self.boxes = []
-        self.track_ids = []
-        self.clss = []
+        # track information
         self.track_history = defaultdict(list)
 
         # Region & Line Information
@@ -109,18 +106,6 @@ class Heatmap:
             print("Using Circular shape now")
             self.shape = "circle"
 
-    def extract_results(self, tracks):
-        """
-        Extracts results from the provided data.
-
-        Args:
-            tracks (list): List of tracks obtained from the object tracking process.
-        """
-        if tracks[0].boxes.id is not None:
-            self.boxes = tracks[0].boxes.xyxy.cpu()
-            self.clss = tracks[0].boxes.cls.tolist()
-            self.track_ids = tracks[0].boxes.id.int().tolist()
-
     def generate_heatmap(self, im0, tracks):
         """
         Generate heatmap based on tracking data.
@@ -137,18 +122,22 @@ class Heatmap:
             self.initialized = True
 
         self.heatmap *= self.decay_factor  # decay factor
+        boxes, clss, track_ids = None, None, None
+        if tracks[0].boxes.id is not None:
+            boxes = tracks[0].boxes.xyxy.cpu()
+            clss = tracks[0].boxes.cls.tolist()
+            track_ids = tracks[0].boxes.id.int().tolist()
 
-        self.extract_results(tracks)
         self.annotator = Annotator(self.im0, self.tf, None)
 
-        if self.track_ids:
+        if track_ids:
             # Draw counting region
             if self.count_reg_pts is not None:
                 self.annotator.draw_region(
                     reg_pts=self.count_reg_pts, color=self.region_color, thickness=self.tf*2
                 )
 
-            for box, cls, track_id in zip(self.boxes, self.clss, self.track_ids):
+            for box, cls, track_id in zip(boxes, clss, track_ids):
                 # Store class info
                 if self.names[cls] not in self.class_wise_count:
                     self.class_wise_count[self.names[cls]] = {"IN": 0, "OUT": 0}
@@ -211,7 +200,7 @@ class Heatmap:
                                     self.class_wise_count[self.names[cls]]["OUT"] += 1
 
         else:
-            for box, cls in zip(self.boxes, self.clss):
+            for box, cls in zip(boxes, clss):
                 if self.shape == "circle":
                     center = (int((box[0] + box[2]) // 2), int((box[1] + box[3]) // 2))
                     radius = min(int(box[2]) - int(box[0]), int(box[3]) - int(box[1])) // 2
