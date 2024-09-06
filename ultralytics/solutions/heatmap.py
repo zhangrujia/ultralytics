@@ -30,7 +30,6 @@ class Heatmap:
         count_txt_color=(0, 0, 0),
         count_bg_color=(255, 255, 255),
         count_reg_color=(255, 0, 255),
-        region_thickness=5,
         line_dist_thresh=15,
         line_thickness=2,
         decay_factor=0.99,
@@ -67,7 +66,6 @@ class Heatmap:
         # Region & Line Information
         self.counting_region = None
         self.line_dist_thresh = line_dist_thresh
-        self.region_thickness = region_thickness
         self.region_color = count_reg_color
 
         # Object Counting Information
@@ -142,7 +140,7 @@ class Heatmap:
             # Draw counting region
             if self.count_reg_pts is not None:
                 self.annotator.draw_region(
-                    reg_pts=self.count_reg_pts, color=self.region_color, thickness=self.region_thickness
+                    reg_pts=self.count_reg_pts, color=self.region_color, thickness=self.tf*2
                 )
 
             for box, cls, track_id in zip(self.boxes, self.clss, self.track_ids):
