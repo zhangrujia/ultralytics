@@ -85,7 +85,6 @@ class Heatmap:
 
         # Region and line selection
         self.count_reg_pts = count_reg_pts
-        print(self.count_reg_pts)
         if self.count_reg_pts is not None:
             if len(self.count_reg_pts) == 2:
                 print("Line Counter Initiated.")
