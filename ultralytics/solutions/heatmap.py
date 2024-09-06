@@ -19,8 +19,6 @@ class Heatmap:
     def __init__(
         self,
         names,
-        imw=0,
-        imh=0,
         colormap=cv2.COLORMAP_JET,
         heatmap_alpha=0.5,
         view_img=False,
@@ -44,8 +42,6 @@ class Heatmap:
         self.names = names  # Classes names
 
         # Image information
-        self.imw = imw
-        self.imh = imh
         self.im0 = None
         self.tf = line_thickness
         self.view_in_counts = view_in_counts

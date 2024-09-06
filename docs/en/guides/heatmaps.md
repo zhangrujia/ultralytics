@@ -274,8 +274,6 @@ A heatmap generated with [Ultralytics YOLOv8](https://github.com/ultralytics/ult
 | Name               | Type             | Default            | Description                                                       |
 | ------------------ | ---------------- | ------------------ | ----------------------------------------------------------------- |
 | `names`            | `list`           | `None`             | Dictionary of class names.                                        |
-| `imw`              | `int`            | `0`                | Image width.                                                      |
-| `imh`              | `int`            | `0`                | Image height.                                                     |
 | `colormap`         | `int`            | `cv2.COLORMAP_JET` | Colormap to use for the heatmap.                                  |
 | `heatmap_alpha`    | `float`          | `0.5`              | Alpha blending value for heatmap overlay.                         |
 | `view_img`         | `bool`           | `False`            | Whether to display the image with the heatmap overlay.            |
