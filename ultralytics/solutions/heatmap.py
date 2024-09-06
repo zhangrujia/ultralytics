@@ -30,7 +30,6 @@ class Heatmap:
         count_txt_color=(0, 0, 0),
         count_bg_color=(255, 255, 255),
         count_reg_color=(255, 0, 255),
-        line_dist_thresh=15,
         line_thickness=2,
         decay_factor=0.99,
         shape="circle",
@@ -65,7 +64,6 @@ class Heatmap:
 
         # Region & Line Information
         self.counting_region = None
-        self.line_dist_thresh = line_dist_thresh
         self.region_color = count_reg_color
 
         # Object Counting Information
@@ -83,12 +81,21 @@ class Heatmap:
         # Check if environment supports imshow
         self.env_check = check_imshow(warn=True)
 
+        self.counting_line_segment = None   # Initialize the counting line segment
+
         # Region and line selection
         self.count_reg_pts = count_reg_pts
         if self.count_reg_pts is not None:
             if len(self.count_reg_pts) == 2:
                 print("Line Counter Initiated.")
                 self.counting_region = LineString(self.count_reg_pts)
+                # Define the counting line segment
+                self.counting_line_segment = LineString(
+                    [
+                        (self.count_reg_pts[0][0], self.count_reg_pts[0][1]),
+                        (self.count_reg_pts[1][0], self.count_reg_pts[1][1]),
+                    ]
+                )
             elif len(self.count_reg_pts) >= 3:
                 print("Polygon Counter Initiated.")
                 self.counting_region = Polygon(self.count_reg_pts)
@@ -187,13 +194,17 @@ class Heatmap:
                     # Count objects using line
                     elif len(self.count_reg_pts) == 2:
                         if prev_position is not None and track_id not in self.count_ids:
-                            distance = Point(track_line[-1]).distance(self.counting_region)
-                            if distance < self.line_dist_thresh and track_id not in self.count_ids:
+                            # Check if the object's movement segment intersects the counting line
+                            if LineString([(prev_position[0], prev_position[1]), (box[0], box[1])]).intersects(
+                                    self.counting_line_segment
+                            ):
                                 self.count_ids.append(track_id)
 
-                                if (box[0] - prev_position[0]) * (
-                                    self.counting_region.centroid.x - prev_position[0]
-                                ) > 0:
+                                # Determine the direction of movement (IN or OUT)
+                                direction = (box[0] - prev_position[0]) * (
+                                        self.counting_region.centroid.x - prev_position[0]
+                                )
+                                if direction > 0:
                                     self.in_counts += 1
                                     self.class_wise_count[self.names[cls]]["IN"] += 1
                                 else:
